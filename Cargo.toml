@@ -1,0 +1,11 @@
+[package]
+name = "teledustry"
+version = "0.1.0"
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+carapax = "0.10"
+getopts = "0.2"
+tokio = { version = "1.11", features = ["rt-multi-thread", "macros", "process", "io-util"] }
