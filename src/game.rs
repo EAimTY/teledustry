@@ -1,15 +1,20 @@
-use std::process::Stdio;
+use std::{process::Stdio, sync::Arc};
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
-    process::Command,
-    sync::mpsc::{Receiver, Sender},
+    process::{Child, Command},
+    sync::{
+        mpsc::{Receiver, Sender},
+        RwLock,
+    },
 };
 
-pub struct Game;
+pub struct Game {
+    game: Child,
+}
 
 impl Game {
-    pub async fn new(sender: Sender<String>, mut receiver: Receiver<String>) -> Result<(), String> {
-        let mut game = Command::new("java")
+    pub fn new() -> Result<Self, String> {
+        let game = Command::new("java")
             .arg("-jar")
             .arg("server.jar")
             .stdin(Stdio::piped())
@@ -17,8 +22,19 @@ impl Game {
             .spawn()
             .or_else(|e| Err(e.to_string()))?;
 
-        let mut stdin = game.stdin.take().unwrap();
-        let mut stdout = BufReader::new(game.stdout.take().unwrap());
+        Ok(Self { game })
+    }
+
+    pub async fn listen(
+        mut self,
+        sender: Sender<String>,
+        mut receiver: Receiver<String>,
+    ) -> Result<(), String> {
+        let output = Arc::new(RwLock::new(String::new()));
+
+        let output_clone = Arc::clone(&output);
+
+        let mut stdin = self.game.stdin.take().unwrap();
 
         tokio::spawn(async move {
             while let Some(cmd) = receiver.recv().await {
@@ -26,19 +42,21 @@ impl Game {
                     .write(format!("{}\n", cmd.trim()).as_bytes())
                     .await
                     .unwrap();
+
+                let mut output = output_clone.write().await;
+                print!("{}", *output);
+                (*output).clear();
             }
         });
 
-        let mut s = String::new();
+        let mut stdout = BufReader::new(self.game.stdout.take().unwrap());
 
-        while let Ok(bytes) = stdout.read_line(&mut s).await {
-            if bytes != 0 {
-                //print!("{}", s);
-                s.clear();
-            } else {
-                println!("here3");
-                break;
-            }
+        let mut line = String::new();
+
+        while let Ok(_) = stdout.read_line(&mut line).await {
+            let mut output = output.write().await;
+            (*output).push_str(&line);
+            line.clear();
         }
 
         Ok(())

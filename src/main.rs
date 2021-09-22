@@ -31,11 +31,15 @@ async fn main() {
         }
     });
 
-    match Game::new(game_to_bot_sender, bot_to_game_receiver).await {
-        Ok(()) => (),
+    let game = match Game::new() {
+        Ok(game) => game,
         Err(e) => {
             println!("{}", e);
             return;
         }
-    }
+    };
+
+    game.listen(game_to_bot_sender, bot_to_game_receiver)
+        .await
+        .unwrap();
 }

@@ -7,7 +7,6 @@ pub async fn message_handler(
     message: Message,
 ) -> Result<HandlerResult, ExecuteError> {
     if let Some(text) = message.get_text() {
-        println!("here2");
         context.sender.send(text.data.clone()).await.unwrap();
     }
     Ok(HandlerResult::Stop)
