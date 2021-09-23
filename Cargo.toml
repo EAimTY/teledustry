@@ -6,6 +6,7 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-carapax = "0.10"
+futures-util = "0.3"
 getopts = "0.2"
+tgbot = "0.14"
 tokio = { version = "1.11", features = ["rt-multi-thread", "macros", "process", "io-util"] }

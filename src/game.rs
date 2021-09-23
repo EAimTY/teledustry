@@ -8,13 +8,14 @@ use tokio::{
     },
 };
 
-pub struct Game {
-    game: Child,
-}
+pub struct Game;
 
 impl Game {
-    pub fn new() -> Result<Self, String> {
-        let game = Command::new("java")
+    pub async fn start(
+        game_to_bot_sender: Sender<String>,
+        mut bot_to_game_receiver: Receiver<String>,
+    ) -> Result<(), String> {
+        let mut game = Command::new("java")
             .arg("-jar")
             .arg("server.jar")
             .stdin(Stdio::piped())
@@ -22,42 +23,29 @@ impl Game {
             .spawn()
             .or_else(|e| Err(e.to_string()))?;
 
-        Ok(Self { game })
-    }
+        let mut game_stdin = game.stdin.take().unwrap();
 
-    pub async fn listen(
-        mut self,
-        sender: Sender<String>,
-        mut receiver: Receiver<String>,
-    ) -> Result<(), String> {
-        let output = Arc::new(RwLock::new(String::new()));
-
-        let output_clone = Arc::clone(&output);
-
-        let mut stdin = self.game.stdin.take().unwrap();
-
-        tokio::spawn(async move {
-            while let Some(cmd) = receiver.recv().await {
-                stdin
+        let handle_input = tokio::spawn(async move {
+            while let Some(cmd) = bot_to_game_receiver.recv().await {
+                game_stdin
                     .write(format!("{}\n", cmd.trim()).as_bytes())
                     .await
                     .unwrap();
-
-                let mut output = output_clone.write().await;
-                print!("{}", *output);
-                (*output).clear();
             }
         });
 
-        let mut stdout = BufReader::new(self.game.stdout.take().unwrap());
+        let mut game_stdout = BufReader::new(game.stdout.take().unwrap());
 
-        let mut line = String::new();
+        let handle_output = tokio::spawn(async move {
+            let mut line = String::new();
 
-        while let Ok(_) = stdout.read_line(&mut line).await {
-            let mut output = output.write().await;
-            (*output).push_str(&line);
-            line.clear();
-        }
+            while let Ok(_) = game_stdout.read_line(&mut line).await {
+                game_to_bot_sender.send(line.clone()).await.unwrap();
+                line.clear();
+            }
+        });
+
+        tokio::try_join!(handle_input, handle_output).unwrap();
 
         Ok(())
     }

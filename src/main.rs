@@ -21,25 +21,16 @@ async fn main() {
     let (bot_to_game_sender, bot_to_game_receiver) = mpsc::channel(2);
     let (game_to_bot_sender, game_to_bot_receiver) = mpsc::channel(2);
 
-    tokio::spawn(async move {
-        match Bot::run(config, bot_to_game_sender, game_to_bot_receiver).await {
-            Ok(()) => (),
-            Err(e) => {
-                println!("{}", e);
-                return;
-            }
-        }
-    });
+    let (api_for_output, api_for_input) = Bot::init(&config).unwrap();
 
-    let game = match Game::new() {
-        Ok(game) => game,
+    tokio::spawn(async move { Bot::handle_output(api_for_output, game_to_bot_receiver).await });
+    tokio::spawn(async move { Bot::handle_input(api_for_input, bot_to_game_sender).await });
+
+    match Game::start(game_to_bot_sender, bot_to_game_receiver).await {
+        Ok(()) => (),
         Err(e) => {
             println!("{}", e);
             return;
         }
-    };
-
-    game.listen(game_to_bot_sender, bot_to_game_receiver)
-        .await
-        .unwrap();
+    }
 }
