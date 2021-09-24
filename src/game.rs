@@ -41,7 +41,7 @@ impl Game {
             let mut last_line = String::new();
 
             while let Ok(_) = game_stdout.read_line(&mut buf).await {
-                if !buf.contains("[I] Server loaded. Type 'help' for help.") {
+                if buf.contains("[I] Server loaded. Type 'help' for help.") {
                     continue;
                 }
 

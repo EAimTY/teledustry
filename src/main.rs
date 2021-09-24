@@ -21,9 +21,8 @@ async fn main() {
     let (bot_to_game_sender, bot_to_game_receiver) = mpsc::channel(2);
     let (game_to_bot_sender, game_to_bot_receiver) = mpsc::channel(2);
 
-    let bot = Bot::init(&config).unwrap();
-    let bot_output = bot.clone();
-    let bot_input = bot.clone();
+    let bot_output = Bot::init(&config).unwrap();
+    let bot_input = bot_output.clone();
 
     tokio::spawn(async move { bot_output.handle_output(game_to_bot_receiver).await });
     tokio::spawn(async move { bot_input.handle_input(bot_to_game_sender).await });

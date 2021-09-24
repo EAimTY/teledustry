@@ -33,8 +33,15 @@ impl Bot {
     }
 
     pub async fn handle_output(self, mut game_to_bot_receiver: mpsc::Receiver<String>) {
-        while let Some(s) = game_to_bot_receiver.recv().await {
-            print!("{}", s);
+        while let Some(output) = game_to_bot_receiver.recv().await {
+            let output_chat = (*self.output_chat.lock().await).clone();
+
+            for chat_id in output_chat {
+                self.api
+                    .execute(SendMessage::new(chat_id, output.clone()))
+                    .await
+                    .unwrap();
+            }
         }
     }
 
@@ -115,10 +122,19 @@ impl UpdateHandler for Handler {
 
                             handler.api.execute(send_message).await.unwrap();
                         }
+
+                        "/help" => {
+                            handler
+                                .bot_to_game_sender
+                                .send(String::from("help"))
+                                .await
+                                .unwrap();
+                        }
+
                         _ => {}
                     }
-                    // bot_to_game_sender.send(text.data.clone()).await.unwrap();
                 }
+                //handler.bot_to_game_sender.send(message.get_text().unwrap().data.clone()).await.unwrap();
             }
         })
     }
