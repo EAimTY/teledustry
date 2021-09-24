@@ -8,5 +8,6 @@ edition = "2018"
 [dependencies]
 futures-util = "0.3"
 getopts = "0.2"
+strip-ansi-escapes = "0.1"
 tgbot = "0.14"
 tokio = { version = "1.11", features = ["rt-multi-thread", "macros", "process", "io-util"] }

@@ -1,4 +1,4 @@
-use std::process::Stdio;
+use std::{process::Stdio, str};
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
     process::Command,
@@ -26,7 +26,7 @@ impl Game {
         let handle_input = tokio::spawn(async move {
             while let Some(cmd) = bot_to_game_receiver.recv().await {
                 game_stdin
-                    .write(format!("{}\nCMD_IND\nCMD_IND\n", cmd.trim()).as_bytes())
+                    .write(format!("{}\nEND_IND\nEND_IND\n", cmd.trim()).as_bytes())
                     .await
                     .unwrap();
             }
@@ -37,25 +37,31 @@ impl Game {
         let handle_output = tokio::spawn(async move {
             let mut output = String::new();
 
-            let mut buf = String::new();
-            let mut last_line = String::new();
+            let mut buf = Vec::new();
+            let mut last_line = b"[00-00-0000 00:00:00] [0] ".iter().cloned().collect::<Vec<u8>>();
 
-            while let Ok(_) = game_stdout.read_line(&mut buf).await {
-                if buf.contains("[I] Server loaded. Type 'help' for help.") {
+            while let Ok(_) = game_stdout.read_until(10, &mut buf).await {
+                buf = strip_ansi_escapes::strip(&buf).unwrap();
+                
+                if buf.ends_with(b"[I] Server loaded. Type 'help' for help.\n") {
+                    buf.clear();
                     continue;
                 }
 
-                if buf.contains("[E] Invalid command. Type 'help' for help.")
-                    && last_line.contains("[E] Invalid command. Type 'help' for help.")
+                if buf.ends_with(b"[E] Invalid command. Type 'help' for help.\n")
+                    && last_line.ends_with(b"[E] Invalid command. Type 'help' for help.\n")
                 {
                     game_to_bot_sender.send(output.clone()).await.unwrap();
-
                     output.clear();
                     buf.clear();
                     last_line.clear();
                 } else {
-                    output.push_str(&last_line);
+                    if output.len() + last_line.len() > 4096 + 22 {
+                        game_to_bot_sender.send(output.clone()).await.unwrap();
+                        output.clear();
+                    }
 
+                    output.push_str(str::from_utf8(&last_line[26..]).unwrap());
                     last_line.clone_from(&buf);
                     buf.clear();
                 }
