@@ -1,10 +1,11 @@
-use crate::{bot::Bot, config::Config, game::Game};
+use crate::{bot_api::Bot, config::Config, mindustry::Game};
 use std::env;
 use tokio::sync::mpsc;
 
-mod bot;
+mod bot_api;
+mod cmd_handler;
 mod config;
-mod game;
+mod mindustry;
 
 #[tokio::main]
 async fn main() {

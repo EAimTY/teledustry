@@ -1,81 +1,43 @@
-use crate::config::Config;
 use futures_util::future::BoxFuture;
 use std::{collections::HashSet, convert::TryFrom, sync::Arc};
 use tgbot::{
-    longpoll::LongPoll,
     methods::SendMessage,
     types::{Command, Update, UpdateKind},
-    webhook, Api, Config as ApiConfig, UpdateHandler,
+    Api, UpdateHandler,
 };
 use tokio::sync::{mpsc, Mutex};
 
-pub struct Bot {
-    api: Api,
-    webhook: u16,
-    output_chat: Arc<Mutex<HashSet<i64>>>,
-}
-
-impl Bot {
-    pub fn init(config: &Config) -> Result<Self, String> {
-        let mut api_config = ApiConfig::new(config.token.clone());
-
-        if let Some(proxy) = config.proxy.clone() {
-            api_config = api_config.proxy(proxy).or_else(|e| Err(e.to_string()))?;
-        }
-
-        let api = Api::new(api_config).or_else(|e| Err(e.to_string()))?;
-
-        Ok(Self {
-            api,
-            webhook: 0,
-            output_chat: Arc::new(Mutex::new(HashSet::new())),
-        })
-    }
-
-    pub async fn handle_output(self, mut game_to_bot_receiver: mpsc::Receiver<String>) {
-        while let Some(output) = game_to_bot_receiver.recv().await {
-            let output_chat = (*self.output_chat.lock().await).clone();
-
-            for chat_id in output_chat {
-                self.api
-                    .execute(SendMessage::new(chat_id, output.clone()))
-                    .await
-                    .unwrap();
-            }
-        }
-    }
-
-    pub async fn handle_input(self, bot_to_game_sender: mpsc::Sender<String>) {
-        LongPoll::new(
-            self.api.clone(),
-            Handler {
-                api: self.api,
-                bot_to_game_sender,
-                output_chat: self.output_chat,
-            },
-        )
-        .run()
-        .await;
-    }
-}
-
-impl Clone for Bot {
-    fn clone(&self) -> Self {
-        Self {
-            api: self.api.clone(),
-            webhook: self.webhook,
-            output_chat: Arc::clone(&self.output_chat),
-        }
-    }
-}
-
-struct Handler {
+pub struct CmdHandler {
     api: Api,
     bot_to_game_sender: mpsc::Sender<String>,
     output_chat: Arc<Mutex<HashSet<i64>>>,
 }
 
-impl UpdateHandler for Handler {
+impl CmdHandler {
+    pub fn new(
+        api: Api,
+        bot_to_game_sender: mpsc::Sender<String>,
+        output_chat: Arc<Mutex<HashSet<i64>>>,
+    ) -> Self {
+        Self {
+            api,
+            bot_to_game_sender,
+            output_chat,
+        }
+    }
+}
+
+impl Clone for CmdHandler {
+    fn clone(&self) -> Self {
+        Self {
+            api: self.api.clone(),
+            bot_to_game_sender: self.bot_to_game_sender.clone(),
+            output_chat: Arc::clone(&self.output_chat),
+        }
+    }
+}
+
+impl UpdateHandler for CmdHandler {
     type Future = BoxFuture<'static, ()>;
 
     fn handle(&self, update: Update) -> Self::Future {
@@ -134,18 +96,7 @@ impl UpdateHandler for Handler {
                         _ => {}
                     }
                 }
-                //handler.bot_to_game_sender.send(message.get_text().unwrap().data.clone()).await.unwrap();
             }
         })
-    }
-}
-
-impl Clone for Handler {
-    fn clone(&self) -> Self {
-        Self {
-            api: self.api.clone(),
-            bot_to_game_sender: self.bot_to_game_sender.clone(),
-            output_chat: Arc::clone(&self.output_chat),
-        }
     }
 }

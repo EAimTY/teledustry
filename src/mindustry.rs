@@ -38,11 +38,14 @@ impl Game {
             let mut output = String::new();
 
             let mut buf = Vec::new();
-            let mut last_line = b"[00-00-0000 00:00:00] [0] ".iter().cloned().collect::<Vec<u8>>();
+            let mut last_line = b"[00-00-0000 00:00:00] [0] "
+                .iter()
+                .cloned()
+                .collect::<Vec<u8>>();
 
             while let Ok(_) = game_stdout.read_until(10, &mut buf).await {
                 buf = strip_ansi_escapes::strip(&buf).unwrap();
-                
+
                 if buf.ends_with(b"[I] Server loaded. Type 'help' for help.\n") {
                     buf.clear();
                     continue;
