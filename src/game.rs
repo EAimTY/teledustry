@@ -44,7 +44,7 @@ impl Game {
                 if !buf.contains("[I] Server loaded. Type 'help' for help.") {
                     continue;
                 }
-                
+
                 if buf.contains("[E] Invalid command. Type 'help' for help.")
                     && last_line.contains("[E] Invalid command. Type 'help' for help.")
                 {
@@ -56,7 +56,7 @@ impl Game {
                 } else {
                     output.push_str(&last_line);
 
-                    last_line = buf.clone();
+                    last_line.clone_from(&buf);
                     buf.clear();
                 }
             }
