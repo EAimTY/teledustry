@@ -1,11 +1,8 @@
-use std::{process::Stdio, sync::Arc};
+use std::process::Stdio;
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
-    process::{Child, Command},
-    sync::{
-        mpsc::{Receiver, Sender},
-        RwLock,
-    },
+    process::Command,
+    sync::mpsc::{Receiver, Sender},
 };
 
 pub struct Game;
@@ -20,6 +17,7 @@ impl Game {
             .arg("server.jar")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
+            .kill_on_drop(true)
             .spawn()
             .or_else(|e| Err(e.to_string()))?;
 
@@ -28,7 +26,7 @@ impl Game {
         let handle_input = tokio::spawn(async move {
             while let Some(cmd) = bot_to_game_receiver.recv().await {
                 game_stdin
-                    .write(format!("{}\n", cmd.trim()).as_bytes())
+                    .write(format!("{}\nCMD_IND\nCMD_IND\n", cmd.trim()).as_bytes())
                     .await
                     .unwrap();
             }
@@ -37,11 +35,30 @@ impl Game {
         let mut game_stdout = BufReader::new(game.stdout.take().unwrap());
 
         let handle_output = tokio::spawn(async move {
-            let mut line = String::new();
+            let mut output = String::new();
 
-            while let Ok(_) = game_stdout.read_line(&mut line).await {
-                game_to_bot_sender.send(line.clone()).await.unwrap();
-                line.clear();
+            let mut buf = String::new();
+            let mut last_line = String::new();
+
+            while let Ok(_) = game_stdout.read_line(&mut buf).await {
+                if !buf.contains("[I] Server loaded. Type 'help' for help.") {
+                    continue;
+                }
+                
+                if buf.contains("[E] Invalid command. Type 'help' for help.")
+                    && last_line.contains("[E] Invalid command. Type 'help' for help.")
+                {
+                    game_to_bot_sender.send(output.clone()).await.unwrap();
+
+                    output.clear();
+                    buf.clear();
+                    last_line.clear();
+                } else {
+                    output.push_str(&last_line);
+
+                    last_line = buf.clone();
+                    buf.clear();
+                }
             }
         });
 

@@ -24,30 +24,27 @@ impl Bot {
     }
 
     pub async fn handle_output(api: Api, mut game_to_bot_receiver: mpsc::Receiver<String>) {
-        while let Some(line) = game_to_bot_receiver.recv().await {
-            print!("{}", line);
+        while let Some(s) = game_to_bot_receiver.recv().await {
+            print!("{}", s);
         }
     }
 
     pub async fn handle_input(api: Api, bot_to_game_sender: mpsc::Sender<String>) {
-        LongPoll::new(api.clone(), Handler::new(api, bot_to_game_sender))
-            .run()
-            .await;
+        LongPoll::new(
+            api.clone(),
+            Handler {
+                api,
+                bot_to_game_sender,
+            },
+        )
+        .run()
+        .await;
     }
 }
 
 struct Handler {
     api: Api,
     bot_to_game_sender: mpsc::Sender<String>,
-}
-
-impl Handler {
-    fn new(api: Api, bot_to_game_sender: mpsc::Sender<String>) -> Self {
-        Self {
-            api,
-            bot_to_game_sender,
-        }
-    }
 }
 
 impl UpdateHandler for Handler {
