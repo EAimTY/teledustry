@@ -1,5 +1,5 @@
 use crate::config::Config;
-use futures_util::{future::BoxFuture, Future};
+use futures_util::future::BoxFuture;
 use std::{
     collections::{HashMap, HashSet},
     convert::TryFrom,
@@ -8,7 +8,7 @@ use std::{
 use tgbot::{
     longpoll::LongPoll,
     methods::SendMessage,
-    types::{Command as BotCommand, Update, UpdateKind},
+    types::{Command, Update, UpdateKind},
     Api, Config as ApiConfig, UpdateHandler,
 };
 use tokio::sync::{mpsc, Mutex};
@@ -60,11 +60,11 @@ impl BotInstance {
     }
 }
 
-type CommandOutput<T> = Box<dyn Future<Output = T>>;
-type Command<T> = Box<dyn Fn(BotUpdateHandler) -> CommandOutput<T> + Send + Sync>;
+type CommandHandler<T> =
+    Box<dyn Fn(BotUpdateHandler, Command) -> BoxFuture<'static, T> + Send + Sync>;
 
 struct Context {
-    commands: Arc<HashMap<&'static str, Command<()>>>,
+    commands: Arc<HashMap<&'static str, CommandHandler<()>>>,
     output_chat: Arc<Mutex<HashSet<i64>>>,
 }
 
@@ -72,10 +72,57 @@ impl Context {
     fn init() -> Self {
         let mut commands = HashMap::new();
 
-        fn func(handler: BotUpdateHandler) -> CommandOutput<()> {
-            Box::new(async move { todo!() })
+        fn output(handler: BotUpdateHandler, command: Command) -> BoxFuture<'static, ()> {
+            Box::pin(async move {
+                let chat_id = command.get_message().get_chat_id();
+
+                let mut output_chat = handler.context.output_chat.lock().await;
+
+                let send_message;
+
+                if output_chat.insert(chat_id) {
+                    send_message = SendMessage::new(chat_id, "OKay, I will send the output here");
+                } else {
+                    send_message =
+                        SendMessage::new(chat_id, "This chat is already in the output chat list");
+                }
+
+                handler.api.execute(send_message).await.unwrap();
+            })
         }
-        commands.insert("key", Box::new(func) as Command<()>);
+        commands.insert("/output", Box::new(output) as CommandHandler<()>);
+
+        fn stop_output(handler: BotUpdateHandler, command: Command) -> BoxFuture<'static, ()> {
+            Box::pin(async move {
+                let chat_id = command.get_message().get_chat_id();
+
+                let mut output_chat = handler.context.output_chat.lock().await;
+
+                let send_message;
+
+                if output_chat.remove(&chat_id) {
+                    send_message =
+                        SendMessage::new(chat_id, "Okay, I will not send the output here anymore");
+                } else {
+                    send_message =
+                        SendMessage::new(chat_id, "This chat is not in the output chat list");
+                }
+
+                handler.api.execute(send_message).await.unwrap();
+            })
+        }
+        commands.insert("/stop_output", Box::new(stop_output) as CommandHandler<()>);
+
+        fn help(handler: BotUpdateHandler, _command: Command) -> BoxFuture<'static, ()> {
+            Box::pin(async move {
+                handler
+                    .bot_to_game_sender
+                    .send(String::from("help"))
+                    .await
+                    .unwrap();
+            })
+        }
+        commands.insert("/help", Box::new(help) as CommandHandler<()>);
 
         Self {
             commands: Arc::new(commands),
@@ -109,6 +156,16 @@ impl BotUpdateHandler {
     }
 }
 
+impl Clone for BotUpdateHandler {
+    fn clone(&self) -> Self {
+        Self {
+            api: self.api.clone(),
+            bot_to_game_sender: self.bot_to_game_sender.clone(),
+            context: self.context.clone(),
+        }
+    }
+}
+
 impl UpdateHandler for BotUpdateHandler {
     type Future = BoxFuture<'static, ()>;
 
@@ -117,56 +174,12 @@ impl UpdateHandler for BotUpdateHandler {
 
         Box::pin(async move {
             if let UpdateKind::Message(message) = update.kind {
-                let chat_id = message.get_chat_id();
+                if let Ok(command) = Command::try_from(message) {
+                    let commands = Arc::clone(&handler.context.commands);
 
-                if let Ok(command) = BotCommand::try_from(message) { /*
-                     match command.get_name() {
-                         "/output_here" => {
-                             let mut output_chat = handler.output_chat.lock().await;
-                             let send_message;
-
-                             if output_chat.insert(chat_id) {
-                                 send_message =
-                                     SendMessage::new(chat_id, "OKay, I will send the output here");
-                             } else {
-                                 send_message = SendMessage::new(
-                                     chat_id,
-                                     "This chat is already in the output chat list",
-                                 );
-                             }
-
-                             handler.api.execute(send_message).await.unwrap();
-                         }
-
-                         "/stop_output" => {
-                             let mut output_chat = handler.output_chat.lock().await;
-                             let send_message;
-
-                             if output_chat.remove(&chat_id) {
-                                 send_message = SendMessage::new(
-                                     chat_id,
-                                     "Okay, I will not send the output here anymore",
-                                 );
-                             } else {
-                                 send_message = SendMessage::new(
-                                     chat_id,
-                                     "This chat is not in the output chat list",
-                                 );
-                             }
-
-                             handler.api.execute(send_message).await.unwrap();
-                         }
-
-                         "/help" => {
-                             handler
-                                 .bot_to_game_sender
-                                 .send(String::from("help"))
-                                 .await
-                                 .unwrap();
-                         }
-
-                         _ => {}
-                     }*/
+                    if let Some(command_handler) = commands.get(command.get_name()) {
+                        command_handler(handler, command).await;
+                    }
                 }
             }
         })
