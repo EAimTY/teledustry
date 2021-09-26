@@ -1,9 +1,8 @@
-use crate::{bot_api::Bot, config::Config, mindustry::Game};
+use crate::{bot::BotInstance, config::Config, mindustry::Game};
 use std::env;
 use tokio::sync::mpsc;
 
-mod bot_api;
-mod cmd_handler;
+mod bot;
 mod config;
 mod mindustry;
 
@@ -22,7 +21,7 @@ async fn main() {
     let (bot_to_game_sender, bot_to_game_receiver) = mpsc::channel(2);
     let (game_to_bot_sender, game_to_bot_receiver) = mpsc::channel(2);
 
-    let bot_output = Bot::init(&config).unwrap();
+    let bot_output = BotInstance::init(&config).unwrap();
     let bot_input = bot_output.clone();
 
     tokio::spawn(async move { bot_output.handle_output(game_to_bot_receiver).await });
