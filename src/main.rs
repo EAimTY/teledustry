@@ -3,6 +3,7 @@ use std::env;
 use tokio::sync::mpsc;
 
 mod bot;
+mod command;
 mod config;
 mod mindustry;
 
