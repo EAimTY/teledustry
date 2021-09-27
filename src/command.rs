@@ -1,12 +1,17 @@
 use crate::bot::{BotUpdateHandler, CommandHandler};
 use futures_util::future::BoxFuture;
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 use tgbot::{methods::SendMessage, types::Command};
+
+pub struct GameCommand {
+    description: String,
+    pub handler: CommandHandler<()>,
+}
 
 pub struct CommandList;
 
 impl CommandList {
-    pub fn init(help_output: String) -> HashMap<&'static str, CommandHandler<()>> {
+    pub fn init(help_output: String) -> HashMap<String, GameCommand> {
         let mut commands = HashMap::new();
 
         fn output(handler: BotUpdateHandler, command: Command) -> BoxFuture<'static, ()> {
@@ -27,7 +32,13 @@ impl CommandList {
                 handler.api.execute(send_message).await.unwrap();
             })
         }
-        commands.insert("/output", Box::new(output) as CommandHandler<()>);
+        commands.insert(
+            String::from("/output"),
+            GameCommand {
+                description: String::from("Send the output to this chat"),
+                handler: Box::new(output) as CommandHandler<()>,
+            },
+        );
 
         fn stop_output(handler: BotUpdateHandler, command: Command) -> BoxFuture<'static, ()> {
             Box::pin(async move {
@@ -48,18 +59,72 @@ impl CommandList {
                 handler.api.execute(send_message).await.unwrap();
             })
         }
-        commands.insert("/stop_output", Box::new(stop_output) as CommandHandler<()>);
+        commands.insert(
+            String::from("/stop_output"),
+            GameCommand {
+                description: String::from("Stop sending the output to this chat"),
+                handler: Box::new(stop_output) as CommandHandler<()>,
+            },
+        );
 
-        fn help(handler: BotUpdateHandler, _command: Command) -> BoxFuture<'static, ()> {
+        fn help(handler: BotUpdateHandler, command: Command) -> BoxFuture<'static, ()> {
             Box::pin(async move {
+                let chat_id = command.get_message().get_chat_id();
+
+                let commands = Arc::clone(
+                    Arc::clone(&handler.context.commands)
+                        .read()
+                        .await
+                        .as_ref()
+                        .unwrap(),
+                );
+
+                let mut help_message = String::from("Commands:");
+
+                for (name, game_command) in commands.iter() {
+                    help_message.push_str(&format!("\n{} {}", name, game_command.description));
+                }
+
                 handler
-                    .bot_to_game_sender
-                    .send(String::from("help"))
+                    .api
+                    .execute(SendMessage::new(chat_id, help_message))
                     .await
                     .unwrap();
             })
         }
-        commands.insert("/help", Box::new(help) as CommandHandler<()>);
+        commands.insert(
+            String::from("/help"),
+            GameCommand {
+                description: String::from("Print the help menu"),
+                handler: Box::new(help) as CommandHandler<()>,
+            },
+        );
+
+        fn generic_handler(handler: BotUpdateHandler, command: Command) -> BoxFuture<'static, ()> {
+            Box::pin(async move {
+                let name = &command.get_name()[1..];
+                let args = command
+                    .get_args()
+                    .into_iter()
+                    .map(|arg| format!(" {}", arg))
+                    .collect::<String>();
+
+                handler
+                    .input_sender
+                    .send(format!("{}{}", name, args))
+                    .await
+                    .unwrap();
+            })
+        }
+
+        for command in help_output.split('\n') {
+            if let Some((name, description)) = command.trim_start().split_once(' ') {
+                commands.entry(format!("/{}", name)).or_insert(GameCommand {
+                    description: description.trim_start_matches("- ").to_string(),
+                    handler: Box::new(generic_handler) as CommandHandler<()>,
+                });
+            }
+        }
 
         commands
     }

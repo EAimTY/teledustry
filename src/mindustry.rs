@@ -9,8 +9,8 @@ pub struct Game;
 
 impl Game {
     pub async fn start(
-        game_to_bot_sender: Sender<String>,
-        mut bot_to_game_receiver: Receiver<String>,
+        output_sender: Sender<String>,
+        mut input_receiver: Receiver<String>,
     ) -> Result<(), String> {
         let mut game = Command::new("java")
             .arg("-jar")
@@ -29,9 +29,9 @@ impl Game {
                 .await
                 .unwrap();
 
-            while let Some(cmd) = bot_to_game_receiver.recv().await {
+            while let Some(cmd) = input_receiver.recv().await {
                 game_stdin
-                    .write(format!("{}\nEND_CMD\nEND_CMD\n", cmd.trim()).as_bytes())
+                    .write(format!("{}\nEND_CMD\nEND_CMD\n", cmd).as_bytes())
                     .await
                     .unwrap();
             }
@@ -62,13 +62,13 @@ impl Game {
                 if buf.ends_with(b"[E] Invalid command. Type 'help' for help.\n")
                     && last_line.ends_with(b"[E] Invalid command. Type 'help' for help.\n")
                 {
-                    game_to_bot_sender.send(output.clone()).await.unwrap();
+                    output_sender.send(output.clone()).await.unwrap();
                     output.clear();
                     buf.clear();
                     last_line.clone_from(&ignore);
                 } else {
                     if output.len() + last_line.len() > 4096 + 22 {
-                        game_to_bot_sender.send(output.clone()).await.unwrap();
+                        output_sender.send(output.clone()).await.unwrap();
                         output.clear();
                     }
 

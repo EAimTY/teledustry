@@ -1,4 +1,7 @@
-use crate::{command::CommandList, config::Config};
+use crate::{
+    command::{CommandList, GameCommand},
+    config::Config,
+};
 use futures_util::future::BoxFuture;
 use std::{
     collections::{HashMap, HashSet},
@@ -37,8 +40,8 @@ impl BotInstance {
         })
     }
 
-    pub async fn handle_output(self, mut game_to_bot_receiver: mpsc::Receiver<String>) {
-        while let Some(output) = game_to_bot_receiver.recv().await {
+    pub async fn handle_output(self, mut output_receiver: mpsc::Receiver<String>) {
+        while let Some(output) = output_receiver.recv().await {
             if output.starts_with("Commands:\n") {
                 *self.context.commands.write().await = Some(Arc::new(CommandList::init(output)));
             } else {
@@ -54,10 +57,10 @@ impl BotInstance {
         }
     }
 
-    pub async fn handle_input(self, bot_to_game_sender: mpsc::Sender<String>) {
+    pub async fn handle_input(self, input_sender: mpsc::Sender<String>) {
         LongPoll::new(
             self.api.clone(),
-            BotUpdateHandler::new(self.api, bot_to_game_sender, self.context),
+            BotUpdateHandler::new(self.api, input_sender, self.context),
         )
         .run()
         .await;
@@ -68,7 +71,7 @@ pub type CommandHandler<T> =
     Box<dyn Fn(BotUpdateHandler, Command) -> BoxFuture<'static, T> + Send + Sync>;
 
 pub struct Context {
-    commands: Arc<RwLock<Option<Arc<HashMap<&'static str, CommandHandler<()>>>>>>,
+    pub commands: Arc<RwLock<Option<Arc<HashMap<String, GameCommand>>>>>,
     pub output_chat: Arc<Mutex<HashSet<i64>>>,
 }
 
@@ -92,15 +95,15 @@ impl Clone for Context {
 
 pub struct BotUpdateHandler {
     pub api: Api,
-    pub bot_to_game_sender: mpsc::Sender<String>,
+    pub input_sender: mpsc::Sender<String>,
     pub context: Context,
 }
 
 impl BotUpdateHandler {
-    fn new(api: Api, bot_to_game_sender: mpsc::Sender<String>, context: Context) -> Self {
+    fn new(api: Api, input_sender: mpsc::Sender<String>, context: Context) -> Self {
         Self {
             api,
-            bot_to_game_sender,
+            input_sender,
             context,
         }
     }
@@ -110,7 +113,7 @@ impl Clone for BotUpdateHandler {
     fn clone(&self) -> Self {
         Self {
             api: self.api.clone(),
-            bot_to_game_sender: self.bot_to_game_sender.clone(),
+            input_sender: self.input_sender.clone(),
             context: self.context.clone(),
         }
     }
@@ -133,8 +136,8 @@ impl UpdateHandler for BotUpdateHandler {
                             .unwrap(),
                     );
 
-                    if let Some(command_handler) = commands.get(command.get_name()) {
-                        command_handler(handler, command).await;
+                    if let Some(game_command) = commands.get(command.get_name()) {
+                        (game_command.handler)(handler, command).await;
                     }
                 }
             }

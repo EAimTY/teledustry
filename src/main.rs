@@ -19,16 +19,16 @@ async fn main() {
         }
     };
 
-    let (bot_to_game_sender, bot_to_game_receiver) = mpsc::channel(2);
-    let (game_to_bot_sender, game_to_bot_receiver) = mpsc::channel(2);
+    let (input_sender, input_receiver) = mpsc::channel(2);
+    let (output_sender, output_receiver) = mpsc::channel(2);
 
     let bot_output = BotInstance::init(&config).unwrap();
     let bot_input = bot_output.clone();
 
-    tokio::spawn(async move { bot_output.handle_output(game_to_bot_receiver).await });
-    tokio::spawn(async move { bot_input.handle_input(bot_to_game_sender).await });
+    tokio::spawn(async move { bot_output.handle_output(output_receiver).await });
+    tokio::spawn(async move { bot_input.handle_input(input_sender).await });
 
-    match Game::start(game_to_bot_sender, bot_to_game_receiver).await {
+    match Game::start(output_sender, input_receiver).await {
         Ok(()) => (),
         Err(e) => {
             println!("{}", e);
