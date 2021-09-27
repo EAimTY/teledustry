@@ -11,7 +11,7 @@ use tgbot::{
     types::{Command, Update, UpdateKind},
     Api, Config as ApiConfig, UpdateHandler,
 };
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::{mpsc, Mutex, RwLock};
 
 #[derive(Clone)]
 pub struct BotInstance {
@@ -39,13 +39,17 @@ impl BotInstance {
 
     pub async fn handle_output(self, mut game_to_bot_receiver: mpsc::Receiver<String>) {
         while let Some(output) = game_to_bot_receiver.recv().await {
-            let output_chat = (*self.context.output_chat.lock().await).clone();
+            if output.starts_with("Commands:\n") {
+                *self.context.commands.write().await = Some(Arc::new(CommandList::init(output)));
+            } else {
+                let output_chat = (*self.context.output_chat.lock().await).clone();
 
-            for chat_id in output_chat {
-                self.api
-                    .execute(SendMessage::new(chat_id, output.clone()))
-                    .await
-                    .unwrap();
+                for chat_id in output_chat {
+                    self.api
+                        .execute(SendMessage::new(chat_id, output.clone()))
+                        .await
+                        .unwrap();
+                }
             }
         }
     }
@@ -64,14 +68,14 @@ pub type CommandHandler<T> =
     Box<dyn Fn(BotUpdateHandler, Command) -> BoxFuture<'static, T> + Send + Sync>;
 
 pub struct Context {
-    commands: Arc<HashMap<&'static str, CommandHandler<()>>>,
+    commands: Arc<RwLock<Option<Arc<HashMap<&'static str, CommandHandler<()>>>>>>,
     pub output_chat: Arc<Mutex<HashSet<i64>>>,
 }
 
 impl Context {
     fn init() -> Self {
         Self {
-            commands: Arc::new(CommandList::init()),
+            commands: Arc::new(RwLock::new(None)),
             output_chat: Arc::new(Mutex::new(HashSet::new())),
         }
     }
@@ -121,7 +125,13 @@ impl UpdateHandler for BotUpdateHandler {
         Box::pin(async move {
             if let UpdateKind::Message(message) = update.kind {
                 if let Ok(command) = Command::try_from(message) {
-                    let commands = Arc::clone(&handler.context.commands);
+                    let commands = Arc::clone(
+                        Arc::clone(&handler.context.commands)
+                            .read()
+                            .await
+                            .as_ref()
+                            .unwrap(),
+                    );
 
                     if let Some(command_handler) = commands.get(command.get_name()) {
                         command_handler(handler, command).await;

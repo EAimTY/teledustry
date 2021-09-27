@@ -24,9 +24,14 @@ impl Game {
         let mut game_stdin = game.stdin.take().unwrap();
 
         let handle_input = tokio::spawn(async move {
+            game_stdin
+                .write("help\nEND_CMD\nEND_CMD\n".as_bytes())
+                .await
+                .unwrap();
+
             while let Some(cmd) = bot_to_game_receiver.recv().await {
                 game_stdin
-                    .write(format!("{}\nEND_IND\nEND_IND\n", cmd.trim()).as_bytes())
+                    .write(format!("{}\nEND_CMD\nEND_CMD\n", cmd.trim()).as_bytes())
                     .await
                     .unwrap();
             }

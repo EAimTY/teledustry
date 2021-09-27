@@ -6,7 +6,7 @@ use tgbot::{methods::SendMessage, types::Command};
 pub struct CommandList;
 
 impl CommandList {
-    pub fn init() -> HashMap<&'static str, CommandHandler<()>> {
+    pub fn init(help_output: String) -> HashMap<&'static str, CommandHandler<()>> {
         let mut commands = HashMap::new();
 
         fn output(handler: BotUpdateHandler, command: Command) -> BoxFuture<'static, ()> {
