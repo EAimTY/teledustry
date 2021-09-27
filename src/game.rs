@@ -8,7 +8,7 @@ use tokio::{
 pub struct Game;
 
 impl Game {
-    pub async fn start(
+    pub async fn spawn(
         output_sender: Sender<String>,
         mut input_receiver: Receiver<String>,
     ) -> Result<(), String> {
@@ -23,7 +23,7 @@ impl Game {
 
         let mut game_stdin = game.stdin.take().unwrap();
 
-        let handle_input = tokio::spawn(async move {
+        let input_handler = tokio::spawn(async move {
             game_stdin
                 .write("help\nEND_CMD\nEND_CMD\n".as_bytes())
                 .await
@@ -39,7 +39,7 @@ impl Game {
 
         let mut game_stdout = BufReader::new(game.stdout.take().unwrap());
 
-        let handle_output = tokio::spawn(async move {
+        let output_handler = tokio::spawn(async move {
             let mut output = String::new();
 
             let ignore = b"[00-00-0000 00:00:00] [0] "
@@ -59,9 +59,8 @@ impl Game {
                     continue;
                 }
 
-                if buf.ends_with(b"[E] Invalid command. Type 'help' for help.\n")
-                    && last_line.ends_with(b"[E] Invalid command. Type 'help' for help.\n")
-                {
+                let end_indicator = b"[E] Invalid command. Type 'help' for help.\n";
+                if buf.ends_with(end_indicator) && last_line.ends_with(end_indicator) {
                     output_sender.send(output.clone()).await.unwrap();
                     output.clear();
                     buf.clear();
@@ -79,7 +78,7 @@ impl Game {
             }
         });
 
-        tokio::try_join!(handle_input, handle_output).unwrap();
+        tokio::try_join!(input_handler, output_handler).unwrap();
 
         Ok(())
     }

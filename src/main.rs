@@ -1,11 +1,11 @@
-use crate::{bot::BotInstance, config::Config, mindustry::Game};
+use crate::{bot::BotInstance, config::Config, game::Game};
 use std::env;
 use tokio::sync::mpsc;
 
 mod bot;
 mod command;
 mod config;
-mod mindustry;
+mod game;
 
 #[tokio::main]
 async fn main() {
@@ -19,20 +19,16 @@ async fn main() {
         }
     };
 
-    let (input_sender, input_receiver) = mpsc::channel(2);
     let (output_sender, output_receiver) = mpsc::channel(2);
+    let (input_sender, input_receiver) = mpsc::channel(2);
 
-    let bot_output = BotInstance::init(&config).unwrap();
-    let bot_input = bot_output.clone();
+    let bot_output_handler = BotInstance::init(&config).unwrap();
+    let bot_input_handler = bot_output_handler.clone();
 
-    tokio::spawn(async move { bot_output.handle_output(output_receiver).await });
-    tokio::spawn(async move { bot_input.handle_input(input_sender).await });
+    let handle_bot_output = bot_output_handler.handle_output(output_receiver).await;
+    let handle_bot_input = bot_input_handler.handle_input(input_sender).await;
 
-    match Game::start(output_sender, input_receiver).await {
-        Ok(()) => (),
-        Err(e) => {
-            println!("{}", e);
-            return;
-        }
-    }
+    Game::spawn(output_sender, input_receiver).await.unwrap();
+
+    tokio::try_join!(handle_bot_output, handle_bot_input).unwrap();
 }

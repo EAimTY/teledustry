@@ -1,5 +1,5 @@
 use crate::{
-    command::{CommandList, GameCommand},
+    command::{GameCommand, GameCommandMap},
     config::Config,
 };
 use futures_util::future::BoxFuture;
@@ -14,7 +14,10 @@ use tgbot::{
     types::{Command, Update, UpdateKind},
     Api, Config as ApiConfig, UpdateHandler,
 };
-use tokio::sync::{mpsc, Mutex, RwLock};
+use tokio::{
+    sync::{mpsc, Mutex, RwLock},
+    task::JoinHandle,
+};
 
 #[derive(Clone)]
 pub struct BotInstance {
@@ -40,35 +43,43 @@ impl BotInstance {
         })
     }
 
-    pub async fn handle_output(self, mut output_receiver: mpsc::Receiver<String>) {
-        while let Some(output) = output_receiver.recv().await {
-            if output.starts_with("Commands:\n") {
-                *self.context.commands.write().await = Some(Arc::new(CommandList::init(output)));
-            } else {
-                let output_chat = (*self.context.output_chat.lock().await).clone();
+    pub async fn handle_output(
+        self,
+        mut output_receiver: mpsc::Receiver<String>,
+    ) -> JoinHandle<()> {
+        let output_handler = tokio::spawn(async move {
+            while let Some(output) = output_receiver.recv().await {
+                if output.starts_with("Commands:\n") {
+                    *self.context.commands.write().await =
+                        Some(Arc::new(GameCommandMap::init(output)));
+                } else {
+                    let output_chat = (*self.context.output_chat.lock().await).clone();
 
-                for chat_id in output_chat {
-                    self.api
-                        .execute(SendMessage::new(chat_id, output.clone()))
-                        .await
-                        .unwrap();
+                    for chat_id in output_chat {
+                        self.api
+                            .execute(SendMessage::new(chat_id, output.clone()))
+                            .await
+                            .unwrap();
+                    }
                 }
             }
-        }
+        });
+
+        output_handler
     }
 
-    pub async fn handle_input(self, input_sender: mpsc::Sender<String>) {
-        LongPoll::new(
-            self.api.clone(),
-            BotUpdateHandler::new(self.api, input_sender, self.context),
-        )
-        .run()
-        .await;
+    pub async fn handle_input(self, input_sender: mpsc::Sender<String>) -> JoinHandle<()> {
+        let input_handler = tokio::spawn(async move {
+            LongPoll::new(
+                self.api.clone(),
+                BotUpdateHandler::new(self.api, input_sender, self.context),
+            )
+            .run()
+            .await;
+        });
+        input_handler
     }
 }
-
-pub type CommandHandler<T> =
-    Box<dyn Fn(BotUpdateHandler, Command) -> BoxFuture<'static, T> + Send + Sync>;
 
 pub struct Context {
     pub commands: Arc<RwLock<Option<Arc<HashMap<String, GameCommand>>>>>,

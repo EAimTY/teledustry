@@ -1,16 +1,18 @@
-use crate::bot::{BotUpdateHandler, CommandHandler};
+use crate::bot::BotUpdateHandler;
 use futures_util::future::BoxFuture;
 use std::{collections::HashMap, sync::Arc};
 use tgbot::{methods::SendMessage, types::Command};
 
+type GameCommandHandler =
+    Box<dyn Fn(BotUpdateHandler, Command) -> BoxFuture<'static, ()> + Send + Sync>;
 pub struct GameCommand {
-    description: String,
-    pub handler: CommandHandler<()>,
+    pub description: String,
+    pub handler: GameCommandHandler,
 }
 
-pub struct CommandList;
+pub struct GameCommandMap;
 
-impl CommandList {
+impl GameCommandMap {
     pub fn init(help_output: String) -> HashMap<String, GameCommand> {
         let mut commands = HashMap::new();
 
@@ -36,7 +38,7 @@ impl CommandList {
             String::from("/output"),
             GameCommand {
                 description: String::from("Send the output to this chat"),
-                handler: Box::new(output) as CommandHandler<()>,
+                handler: Box::new(output) as GameCommandHandler,
             },
         );
 
@@ -63,7 +65,7 @@ impl CommandList {
             String::from("/stop_output"),
             GameCommand {
                 description: String::from("Stop sending the output to this chat"),
-                handler: Box::new(stop_output) as CommandHandler<()>,
+                handler: Box::new(stop_output) as GameCommandHandler,
             },
         );
 
@@ -96,7 +98,7 @@ impl CommandList {
             String::from("/help"),
             GameCommand {
                 description: String::from("Print the help menu"),
-                handler: Box::new(help) as CommandHandler<()>,
+                handler: Box::new(help) as GameCommandHandler,
             },
         );
 
@@ -121,7 +123,7 @@ impl CommandList {
             if let Some((name, description)) = command.trim_start().split_once(' ') {
                 commands.entry(format!("/{}", name)).or_insert(GameCommand {
                     description: description.trim_start_matches("- ").to_string(),
-                    handler: Box::new(generic_handler) as CommandHandler<()>,
+                    handler: Box::new(generic_handler) as GameCommandHandler,
                 });
             }
         }
