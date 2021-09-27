@@ -37,11 +37,14 @@ impl Game {
         let handle_output = tokio::spawn(async move {
             let mut output = String::new();
 
-            let mut buf = Vec::new();
-            let mut last_line = b"[00-00-0000 00:00:00] [0] "
+            let ignore = b"[00-00-0000 00:00:00] [0] "
                 .iter()
                 .cloned()
                 .collect::<Vec<u8>>();
+            let mut last_line = Vec::new();
+
+            let mut buf = Vec::new();
+            last_line.clone_from(&ignore);
 
             while let Ok(_) = game_stdout.read_until(10, &mut buf).await {
                 buf = strip_ansi_escapes::strip(&buf).unwrap();
@@ -57,7 +60,7 @@ impl Game {
                     game_to_bot_sender.send(output.clone()).await.unwrap();
                     output.clear();
                     buf.clear();
-                    last_line.clear();
+                    last_line.clone_from(&ignore);
                 } else {
                     if output.len() + last_line.len() > 4096 + 22 {
                         game_to_bot_sender.send(output.clone()).await.unwrap();
