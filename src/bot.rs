@@ -77,7 +77,7 @@ impl BotInstance {
     pub async fn handle_input(self, input_sender: mpsc::Sender<String>) -> JoinHandle<()> {
         let input_handler = tokio::spawn(async move {
             if self.webhook == 0 {
-                println!("Running in longpoll mode\n");
+                println!("Running in longpoll mode");
                 LongPoll::new(
                     self.api.clone(),
                     BotUpdateHandler::new(self.api, input_sender, self.context),
@@ -85,7 +85,7 @@ impl BotInstance {
                 .run()
                 .await;
             } else {
-                println!("Running at port {} in webhook mode\n", self.webhook);
+                println!("Running at port {} in webhook mode", self.webhook);
                 match webhook::run_server(
                     ([127, 0, 0, 1], self.webhook),
                     "/",
@@ -189,7 +189,8 @@ impl UpdateHandler for BotUpdateHandler {
                             .map(|(name, command)| {
                                 BotCommand::new(name, command.description.clone())
                             })
-                            .flat_map(|command| command);
+                            .flat_map(|command| command)
+                            .filter(|command| command.name() != "/start");
 
                         let set_my_commands = SetMyCommands::new(command_list);
                         match handler.api.execute(set_my_commands).await {

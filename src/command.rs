@@ -19,6 +19,49 @@ impl GameCommandMap {
     pub fn init(help_output: String) -> HashMap<String, GameCommand> {
         let mut commands = HashMap::new();
 
+        fn about(
+            handler: BotUpdateHandler,
+            command: Command,
+        ) -> BoxFuture<'static, Result<(), ExecuteError>> {
+            Box::pin(async move {
+                let chat_id = command.get_message().get_chat_id();
+
+                let send_message = SendMessage::new(
+                    chat_id,
+                    r#"
+teledustry
+
+Manage your Mindustry server through a Telegram bot.
+
+https://github.com/EAimTY/teledustry
+
+Useful Commands: 
+/output - Send the output to this chat
+/stop_output - Stop sending the output to this chat
+/help - Print the help menu
+"#,
+                );
+
+                handler.api.execute(send_message).await?;
+
+                Ok(())
+            })
+        }
+        commands.insert(
+            String::from("/start"),
+            GameCommand {
+                description: String::new(),
+                handler: Box::new(about) as GameCommandHandler,
+            },
+        );
+        commands.insert(
+            String::from("/about"),
+            GameCommand {
+                description: String::from("About this bot"),
+                handler: Box::new(about) as GameCommandHandler,
+            },
+        );
+
         fn output(
             handler: BotUpdateHandler,
             command: Command,
@@ -102,6 +145,7 @@ impl GameCommandMap {
                 for (name, game_command) in commands
                     .iter()
                     .sorted_unstable_by(|a, b| Ord::cmp(&a.0, &b.0))
+                    .filter(|(name, _command)| name != &"/start")
                 {
                     help_message.push_str(&format!("\n{} {}", name, game_command.description));
                 }
