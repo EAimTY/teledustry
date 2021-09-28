@@ -156,6 +156,8 @@ impl GameCommandMap {
             }
         }
 
+        commands.remove("/exit");
+
         commands
     }
 }
