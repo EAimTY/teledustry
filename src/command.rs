@@ -1,5 +1,6 @@
 use crate::bot::BotUpdateHandler;
 use futures_util::future::BoxFuture;
+use itertools::Itertools;
 use std::{collections::HashMap, process, sync::Arc};
 use tgbot::{methods::SendMessage, types::Command, ExecuteError};
 
@@ -98,7 +99,10 @@ impl GameCommandMap {
 
                 let mut help_message = String::from("Commands:");
 
-                for (name, game_command) in commands.iter() {
+                for (name, game_command) in commands
+                    .iter()
+                    .sorted_unstable_by(|a, b| Ord::cmp(&a.0, &b.0))
+                {
                     help_message.push_str(&format!("\n{} {}", name, game_command.description));
                 }
 

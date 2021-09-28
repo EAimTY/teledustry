@@ -3,6 +3,7 @@ use crate::{
     config::Config,
 };
 use futures_util::future::BoxFuture;
+use itertools::Itertools;
 use std::{
     collections::{HashMap, HashSet},
     convert::TryFrom,
@@ -184,6 +185,7 @@ impl UpdateHandler for BotUpdateHandler {
                         );
                         let command_list = commands
                             .iter()
+                            .sorted_unstable_by(|a, b| Ord::cmp(&a.0, &b.0))
                             .map(|(name, command)| {
                                 BotCommand::new(name, command.description.clone())
                             })
