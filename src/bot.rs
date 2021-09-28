@@ -11,8 +11,8 @@ use std::{
 };
 use tgbot::{
     longpoll::LongPoll,
-    methods::{GetMe, SendMessage},
-    types::{Command, MessageKind, Update, UpdateKind},
+    methods::{GetMe, SendMessage, SetMyCommands},
+    types::{BotCommand, Command, MessageKind, Update, UpdateKind},
     webhook, Api, Config as ApiConfig, UpdateHandler,
 };
 use tokio::{
@@ -76,7 +76,7 @@ impl BotInstance {
     pub async fn handle_input(self, input_sender: mpsc::Sender<String>) -> JoinHandle<()> {
         let input_handler = tokio::spawn(async move {
             if self.webhook == 0 {
-                println!("Running in longpoll mode");
+                println!("Running in longpoll mode\n");
                 LongPoll::new(
                     self.api.clone(),
                     BotUpdateHandler::new(self.api, input_sender, self.context),
@@ -84,7 +84,7 @@ impl BotInstance {
                 .run()
                 .await;
             } else {
-                println!("Running at port {} in webhook mode", self.webhook);
+                println!("Running at port {} in webhook mode\n", self.webhook);
                 match webhook::run_server(
                     ([127, 0, 0, 1], self.webhook),
                     "/",
@@ -109,6 +109,7 @@ pub struct Context {
     pub bot_username: Arc<RwLock<Option<String>>>,
     pub commands: Arc<RwLock<Option<Arc<HashMap<String, GameCommand>>>>>,
     pub output_chat: Arc<Mutex<HashSet<i64>>>,
+    pub bot_commands_sent: Arc<RwLock<bool>>,
 }
 
 impl Context {
@@ -118,6 +119,7 @@ impl Context {
             bot_username: Arc::new(RwLock::new(None)),
             commands: Arc::new(RwLock::new(None)),
             output_chat: Arc::new(Mutex::new(HashSet::new())),
+            bot_commands_sent: Arc::new(RwLock::new(false)),
         }
     }
 }
@@ -129,6 +131,7 @@ impl Clone for Context {
             bot_username: Arc::clone(&self.bot_username),
             commands: Arc::clone(&self.commands),
             output_chat: Arc::clone(&self.output_chat),
+            bot_commands_sent: Arc::clone(&self.bot_commands_sent),
         }
     }
 }
@@ -168,9 +171,43 @@ impl UpdateHandler for BotUpdateHandler {
         Box::pin(async move {
             if let UpdateKind::Message(message) = update.kind {
                 if let Ok(command) = Command::try_from(message) {
-                    let bot_username = Arc::clone(&handler.context.bot_username);
+                    let bot_commands_sent = Arc::clone(&handler.context.bot_commands_sent);
 
+                    let is_bot_commands_set = bot_commands_sent.read().await.clone();
+                    if !is_bot_commands_set {
+                        let commands = Arc::clone(
+                            Arc::clone(&handler.context.commands)
+                                .read()
+                                .await
+                                .as_ref()
+                                .unwrap(),
+                        );
+                        let command_list = commands
+                            .iter()
+                            .map(|(name, command)| {
+                                BotCommand::new(name, command.description.clone())
+                            })
+                            .flat_map(|command| command);
+
+                        let set_my_commands = SetMyCommands::new(command_list);
+                        match handler.api.execute(set_my_commands).await {
+                            Ok(_) => (),
+                            Err(e) => {
+                                eprintln!(
+                                    "Failed sending the command list to Telegram: {}",
+                                    e.to_string()
+                                );
+                                process::exit(1);
+                            }
+                        }
+
+                        let mut is_bot_commands_set = bot_commands_sent.write().await;
+                        *is_bot_commands_set = true;
+                    }
+
+                    let bot_username = Arc::clone(&handler.context.bot_username);
                     let is_bot_username_known = bot_username.read().await.is_some();
+
                     if !is_bot_username_known {
                         let bot = match handler.api.execute(GetMe).await {
                             Ok(b) => b,
