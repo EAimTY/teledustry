@@ -1,8 +1,13 @@
 use crate::bot::BotUpdateHandler;
-use futures_util::future::BoxFuture;
+use futures_util::{future::BoxFuture, StreamExt};
 use itertools::Itertools;
-use std::{collections::HashMap, process, sync::Arc};
-use tgbot::{methods::SendMessage, types::Command, ExecuteError};
+use std::{collections::HashMap, path::PathBuf, process, sync::Arc};
+use tgbot::{
+    methods::{GetFile, SendMessage},
+    types::{Command, MessageData},
+    ExecuteError,
+};
+use tokio::{fs::File, io::AsyncWriteExt};
 
 type GameCommandHandler = Box<
     dyn Fn(BotUpdateHandler, Command) -> BoxFuture<'static, Result<(), ExecuteError>> + Send + Sync,
@@ -59,6 +64,47 @@ Useful Commands:
             GameCommand {
                 description: String::from("About this bot"),
                 handler: Box::new(about) as GameCommandHandler,
+            },
+        );
+
+        fn help(
+            handler: BotUpdateHandler,
+            command: Command,
+        ) -> BoxFuture<'static, Result<(), ExecuteError>> {
+            Box::pin(async move {
+                let chat_id = command.get_message().get_chat_id();
+
+                let commands = Arc::clone(
+                    Arc::clone(&handler.context.commands)
+                        .read()
+                        .await
+                        .as_ref()
+                        .unwrap(),
+                );
+
+                let mut help_message = String::from("Commands:");
+
+                for (name, game_command) in commands
+                    .iter()
+                    .sorted_unstable_by(|a, b| Ord::cmp(&a.0, &b.0))
+                    .filter(|(name, _command)| name != &"/start")
+                {
+                    help_message.push_str(&format!("\n{} {}", name, game_command.description));
+                }
+
+                handler
+                    .api
+                    .execute(SendMessage::new(chat_id, help_message))
+                    .await?;
+
+                Ok(())
+            })
+        }
+        commands.insert(
+            String::from("/help"),
+            GameCommand {
+                description: String::from("Print the help menu"),
+                handler: Box::new(help) as GameCommandHandler,
             },
         );
 
@@ -125,44 +171,68 @@ Useful Commands:
             },
         );
 
-        fn help(
+        fn uploadmap(
             handler: BotUpdateHandler,
             command: Command,
         ) -> BoxFuture<'static, Result<(), ExecuteError>> {
             Box::pin(async move {
                 let chat_id = command.get_message().get_chat_id();
 
-                let commands = Arc::clone(
-                    Arc::clone(&handler.context.commands)
-                        .read()
-                        .await
-                        .as_ref()
-                        .unwrap(),
-                );
+                if let MessageData::Document { data, .. } = &command.get_message().data {
+                    let file_id = data.file_id.clone();
+                    let file_name = data.file_name.clone().unwrap_or(file_id.clone());
 
-                let mut help_message = String::from("Commands:");
+                    let get_file = GetFile::new(file_id);
+                    let file = handler.api.execute(get_file).await?;
 
-                for (name, game_command) in commands
-                    .iter()
-                    .sorted_unstable_by(|a, b| Ord::cmp(&a.0, &b.0))
-                    .filter(|(name, _command)| name != &"/start")
-                {
-                    help_message.push_str(&format!("\n{} {}", name, game_command.description));
+                    let mut is_map_saved = false;
+
+                    if let Some(file_url) = file.file_path {
+                        if let Ok(mut file_stream) = handler.api.download_file(file_url).await {
+                            let file_path = {
+                                let mut path = PathBuf::from(r"config/maps/");
+                                path.push(file_name);
+                                path
+                            };
+
+                            if let Ok(mut map) = File::create(file_path).await {
+                                if let Some(file) = file_stream.next().await {
+                                    if let Ok(file) = file {
+                                        if let Ok(_) = map.write_all(&file).await {
+                                            is_map_saved = true;
+
+                                            let send_message = SendMessage::new(
+                                                chat_id,
+                                                "Map saved. Use /reloadmaps to reload all maps from disk",
+                                            );
+                                            handler.api.execute(send_message).await?;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if !is_map_saved {
+                        let send_message = SendMessage::new(chat_id, "Failed to save the map");
+                        handler.api.execute(send_message).await?;
+                    }
+                } else {
+                    let send_message = SendMessage::new(
+                        chat_id,
+                        "Please send the map file as an attachment of the command",
+                    );
+                    handler.api.execute(send_message).await?;
                 }
-
-                handler
-                    .api
-                    .execute(SendMessage::new(chat_id, help_message))
-                    .await?;
 
                 Ok(())
             })
         }
         commands.insert(
-            String::from("/help"),
+            String::from("/uploadmap"),
             GameCommand {
-                description: String::from("Print the help menu"),
-                handler: Box::new(help) as GameCommandHandler,
+                description: String::from("Upload a map to config/maps/"),
+                handler: Box::new(uploadmap) as GameCommandHandler,
             },
         );
 
