@@ -1,3 +1,4 @@
+use crate::config::Config;
 use std::{
     process::{self, Stdio},
     str,
@@ -12,12 +13,13 @@ pub struct Game;
 
 impl Game {
     pub async fn spawn(
+        config: &Config,
         output_sender: Sender<String>,
         mut input_receiver: Receiver<String>,
     ) -> Result<(), String> {
         let mut game = Command::new("java")
             .arg("-jar")
-            .arg("server.jar")
+            .arg(config.file.as_str())
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .kill_on_drop(true)

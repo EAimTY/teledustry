@@ -35,7 +35,7 @@ async fn main() {
     let handle_bot_output = bot_output_handler.handle_output(output_receiver).await;
     let handle_bot_input = bot_input_handler.handle_input(input_sender).await;
 
-    match Game::spawn(output_sender, input_receiver).await {
+    match Game::spawn(&config, output_sender, input_receiver).await {
         Ok(_) => (),
         Err(e) => {
             eprintln!("{}", e);

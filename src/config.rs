@@ -4,6 +4,7 @@ pub struct Config {
     pub token: String,
     pub proxy: Option<String>,
     pub webhook: u16,
+    pub file: String,
 }
 
 impl Config {
@@ -30,21 +31,25 @@ impl Config {
         );
         opts.optflag("h", "help", "print this help menu");
 
-        let usage = opts.usage(&format!("Usage: {} [options]", args[0]));
+        let usage = opts.usage(&format!("Usage: {} [options] FILE", args[0]));
 
         let matches = opts
             .parse(&args[1..])
             .or_else(|e| return Err(e.to_string()))?;
 
-        if !matches.free.is_empty() {
-            let mut free = String::new();
+        let file = if matches.free.len() == 1 {
+            matches.free[0].clone()
+        } else {
+            if matches.free.is_empty() {
+                return Err(String::from("Server file not provided"));
+            } else {
+                let mut free = String::new();
+                matches.free[1..]
+                    .iter()
+                    .for_each(|arg| free.push_str(&format!(" \"{}\"", arg)));
 
-            matches
-                .free
-                .iter()
-                .for_each(|arg| free.push_str(&format!("\"{}\" ", arg)));
-
-            return Err(format!("Unrecognized argument: {}", free));
+                return Err(format!("Unrecognized argument:{}", free));
+            }
         };
 
         if matches.opt_present("h") {
@@ -67,6 +72,7 @@ impl Config {
             token,
             proxy,
             webhook,
+            file,
         })
     }
 }
