@@ -93,6 +93,8 @@ impl Game {
                 let end_indicator = b"[E] Invalid command. Type 'help' for help.\n";
 
                 if buf.ends_with(end_indicator) && last_line.ends_with(end_indicator) {
+                    print!("{}", output);
+
                     match output_sender.send(output.clone()).await {
                         Ok(_) => (),
                         Err(e) => {
@@ -109,6 +111,8 @@ impl Game {
                     last_line.clone_from(&ignore);
                 } else {
                     if output.len() + last_line.len() > 4096 + 26 {
+                        print!("{}", output);
+
                         match output_sender.send(output.clone()).await {
                             Ok(_) => (),
                             Err(e) => {

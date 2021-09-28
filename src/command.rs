@@ -6,6 +6,7 @@ use tgbot::{methods::SendMessage, types::Command, ExecuteError};
 type GameCommandHandler = Box<
     dyn Fn(BotUpdateHandler, Command) -> BoxFuture<'static, Result<(), ExecuteError>> + Send + Sync,
 >;
+
 pub struct GameCommand {
     pub description: String,
     pub handler: GameCommandHandler,

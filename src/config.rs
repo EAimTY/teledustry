@@ -22,7 +22,7 @@ impl Config {
             "u",
             "user",
             "(required)specify a Telegram user who can interact with this bot",
-            "TELEGRAM_USER_ID",
+            "TELEGRAM_USERNAME",
         );
         opts.optopt(
             "p",
@@ -38,7 +38,7 @@ impl Config {
         );
         opts.optflag("h", "help", "print this help menu");
 
-        let usage = opts.usage(&format!("Usage: {} [options] FILE", args[0]));
+        let usage = opts.usage(&format!("Usage: {} [options] SERVER_JAR", args[0]));
 
         let matches = opts
             .parse(&args[1..])
@@ -48,7 +48,7 @@ impl Config {
             matches.free[0].clone()
         } else {
             if matches.free.is_empty() {
-                return Err(String::from("Server file not provided"));
+                return Err(String::from("Server jar file not provided"));
             } else {
                 let mut free = String::new();
                 matches.free[1..]
