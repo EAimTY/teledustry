@@ -3,7 +3,7 @@ use getopts::Options;
 pub struct Config {
     pub token: String,
     pub proxy: Option<String>,
-    pub webhook_port: u16,
+    pub webhook: u16,
 }
 
 impl Config {
@@ -57,7 +57,7 @@ impl Config {
 
         let proxy = matches.opt_str("p");
 
-        let webhook_port = matches
+        let webhook = matches
             .opt_str("w")
             .unwrap_or(String::from("0"))
             .parse::<u16>()
@@ -66,7 +66,7 @@ impl Config {
         Ok(Self {
             token,
             proxy,
-            webhook_port,
+            webhook,
         })
     }
 }

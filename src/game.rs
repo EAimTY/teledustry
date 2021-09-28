@@ -37,7 +37,7 @@ impl Game {
                 Ok(_) => (),
                 Err(e) => {
                     eprintln!(
-                        "Failed to communicate with the game proccess: {}",
+                        "Failed to communicate with the game process: {}",
                         e.to_string()
                     );
                     process::exit(1);
@@ -52,7 +52,7 @@ impl Game {
                     Ok(_) => (),
                     Err(e) => {
                         eprintln!(
-                            "Failed to communicate with the game proccess: {}",
+                            "Failed to communicate with the game process: {}",
                             e.to_string()
                         );
                         process::exit(1);

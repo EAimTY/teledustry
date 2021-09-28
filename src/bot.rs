@@ -6,13 +6,14 @@ use futures_util::future::BoxFuture;
 use std::{
     collections::{HashMap, HashSet},
     convert::TryFrom,
+    process,
     sync::Arc,
 };
 use tgbot::{
     longpoll::LongPoll,
     methods::SendMessage,
     types::{Command, Update, UpdateKind},
-    Api, Config as ApiConfig, UpdateHandler,
+    webhook, Api, Config as ApiConfig, UpdateHandler,
 };
 use tokio::{
     sync::{mpsc, Mutex, RwLock},
@@ -38,7 +39,7 @@ impl BotInstance {
 
         Ok(Self {
             api,
-            webhook: 0,
+            webhook: config.webhook,
             context: Context::init(),
         })
     }
@@ -74,12 +75,30 @@ impl BotInstance {
 
     pub async fn handle_input(self, input_sender: mpsc::Sender<String>) -> JoinHandle<()> {
         let input_handler = tokio::spawn(async move {
-            LongPoll::new(
-                self.api.clone(),
-                BotUpdateHandler::new(self.api, input_sender, self.context),
-            )
-            .run()
-            .await;
+            if self.webhook == 0 {
+                println!("Running in longpoll mode");
+                LongPoll::new(
+                    self.api.clone(),
+                    BotUpdateHandler::new(self.api, input_sender, self.context),
+                )
+                .run()
+                .await;
+            } else {
+                println!("Running at port {} in webhook mode", self.webhook);
+                match webhook::run_server(
+                    ([127, 0, 0, 1], self.webhook),
+                    "/",
+                    BotUpdateHandler::new(self.api, input_sender, self.context),
+                )
+                .await
+                {
+                    Ok(_) => (),
+                    Err(e) => {
+                        eprintln!("Failed running the webhook server: {}", e.to_string());
+                        process::exit(1);
+                    }
+                }
+            }
         });
         input_handler
     }
