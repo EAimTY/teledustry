@@ -20,14 +20,16 @@ teledustry reads game commands from the output of the `help` command of the game
 4. Install [Java Runtime Environment(JRE)](https://developers.redhat.com/products/openjdk/download)
 5. Run teledustry in the following way
 
-    Usage: teledustry [options] SERVER_FILE
+```
+Usage: teledustry [options] SERVER_FILE
 
-    Options:
-        -t, --token TOKEN                (required) set Telegram Bot HTTP API token
-        -u, --user TELEGRAM_USERNAME     (required)specify a Telegram user who can interact with this bot
-        -p, --proxy PROXY                set proxy (supported: http, https, socks5)
-        -w, --webhook-port WEBHOOK_PORT  set webhook port (1 ~ 65535) and run bot in webhook mode
-        -h, --help                       print this help menu
+Options:
+    -t, --token TOKEN                (required) set Telegram Bot HTTP API token
+    -u, --user TELEGRAM_USERNAME     (required)specify a Telegram user who can interact with this bot
+    -p, --proxy PROXY                set proxy (supported: http, https, socks5)
+    -w, --webhook-port WEBHOOK_PORT  set webhook port (1 ~ 65535) and run bot in webhook mode
+    -h, --help                       print this help menu
+```
 
 For example, if your Minedustry game server file is located in the current directory of shell as `server.jar`, you can start teledustry by using:
 
