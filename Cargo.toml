@@ -1,9 +1,12 @@
 [package]
 name = "teledustry"
+description = "Manage your Mindustry server through Telegram bot"
 version = "0.1.0"
+authors = ["EAimTY <ea.imty@gmail.com>"]
 edition = "2018"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+readme = "README.md"
+license = "GPL-3.0 License"
+repository = "https://github.com/EAimTY/teledustry"
 
 [dependencies]
 futures-util = "0.3"
@@ -12,3 +15,8 @@ itertools = "0.10"
 strip-ansi-escapes = "0.1"
 tgbot = "0.14"
 tokio = { version = "1.11", features = ["rt-multi-thread", "macros", "process", "io-util"] }
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = 'abort'

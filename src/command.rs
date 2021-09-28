@@ -36,7 +36,7 @@ impl GameCommandMap {
                     r#"
 teledustry
 
-Manage your Mindustry server through a Telegram bot.
+Manage your Mindustry server through Telegram bot.
 
 https://github.com/EAimTY/teledustry
 
