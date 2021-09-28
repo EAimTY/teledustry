@@ -56,10 +56,14 @@ impl BotInstance {
                     let output_chat = (*self.context.output_chat.lock().await).clone();
 
                     for chat_id in output_chat {
-                        self.api
+                        match self
+                            .api
                             .execute(SendMessage::new(chat_id, output.clone()))
                             .await
-                            .unwrap();
+                        {
+                            Ok(_) => (),
+                            Err(e) => eprintln!("{}", e.to_string()),
+                        }
                     }
                 }
             }
@@ -148,7 +152,10 @@ impl UpdateHandler for BotUpdateHandler {
                     );
 
                     if let Some(game_command) = commands.get(command.get_name()) {
-                        (game_command.handler)(handler, command).await;
+                        match (game_command.handler)(handler, command).await {
+                            Ok(_) => (),
+                            Err(e) => eprintln!("{}", e.to_string()),
+                        }
                     }
                 }
             }

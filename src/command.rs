@@ -1,10 +1,11 @@
 use crate::bot::BotUpdateHandler;
 use futures_util::future::BoxFuture;
-use std::{collections::HashMap, sync::Arc};
-use tgbot::{methods::SendMessage, types::Command};
+use std::{collections::HashMap, process, sync::Arc};
+use tgbot::{methods::SendMessage, types::Command, ExecuteError};
 
-type GameCommandHandler =
-    Box<dyn Fn(BotUpdateHandler, Command) -> BoxFuture<'static, ()> + Send + Sync>;
+type GameCommandHandler = Box<
+    dyn Fn(BotUpdateHandler, Command) -> BoxFuture<'static, Result<(), ExecuteError>> + Send + Sync,
+>;
 pub struct GameCommand {
     pub description: String,
     pub handler: GameCommandHandler,
@@ -16,7 +17,10 @@ impl GameCommandMap {
     pub fn init(help_output: String) -> HashMap<String, GameCommand> {
         let mut commands = HashMap::new();
 
-        fn output(handler: BotUpdateHandler, command: Command) -> BoxFuture<'static, ()> {
+        fn output(
+            handler: BotUpdateHandler,
+            command: Command,
+        ) -> BoxFuture<'static, Result<(), ExecuteError>> {
             Box::pin(async move {
                 let chat_id = command.get_message().get_chat_id();
 
@@ -31,7 +35,9 @@ impl GameCommandMap {
                         SendMessage::new(chat_id, "This chat is already in the output chat list");
                 }
 
-                handler.api.execute(send_message).await.unwrap();
+                handler.api.execute(send_message).await?;
+
+                Ok(())
             })
         }
         commands.insert(
@@ -42,7 +48,10 @@ impl GameCommandMap {
             },
         );
 
-        fn stop_output(handler: BotUpdateHandler, command: Command) -> BoxFuture<'static, ()> {
+        fn stop_output(
+            handler: BotUpdateHandler,
+            command: Command,
+        ) -> BoxFuture<'static, Result<(), ExecuteError>> {
             Box::pin(async move {
                 let chat_id = command.get_message().get_chat_id();
 
@@ -58,7 +67,9 @@ impl GameCommandMap {
                         SendMessage::new(chat_id, "This chat is not in the output chat list");
                 }
 
-                handler.api.execute(send_message).await.unwrap();
+                handler.api.execute(send_message).await?;
+
+                Ok(())
             })
         }
         commands.insert(
@@ -69,7 +80,10 @@ impl GameCommandMap {
             },
         );
 
-        fn help(handler: BotUpdateHandler, command: Command) -> BoxFuture<'static, ()> {
+        fn help(
+            handler: BotUpdateHandler,
+            command: Command,
+        ) -> BoxFuture<'static, Result<(), ExecuteError>> {
             Box::pin(async move {
                 let chat_id = command.get_message().get_chat_id();
 
@@ -90,8 +104,9 @@ impl GameCommandMap {
                 handler
                     .api
                     .execute(SendMessage::new(chat_id, help_message))
-                    .await
-                    .unwrap();
+                    .await?;
+
+                Ok(())
             })
         }
         commands.insert(
@@ -102,7 +117,10 @@ impl GameCommandMap {
             },
         );
 
-        fn generic_handler(handler: BotUpdateHandler, command: Command) -> BoxFuture<'static, ()> {
+        fn generic_handler(
+            handler: BotUpdateHandler,
+            command: Command,
+        ) -> BoxFuture<'static, Result<(), ExecuteError>> {
             Box::pin(async move {
                 let name = &command.get_name()[1..];
                 let args = command
@@ -111,11 +129,16 @@ impl GameCommandMap {
                     .map(|arg| format!(" {}", arg))
                     .collect::<String>();
 
-                handler
-                    .input_sender
-                    .send(format!("{}{}", name, args))
-                    .await
-                    .unwrap();
+                match handler.input_sender.send(format!("{}{}", name, args)).await {
+                    Ok(_) => Ok(()),
+                    Err(e) => {
+                        eprintln!(
+                            "Failed to communicate with the game proccess: {}",
+                            e.to_string()
+                        );
+                        process::exit(1);
+                    }
+                }
             })
         }
 
