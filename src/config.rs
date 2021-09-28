@@ -38,11 +38,15 @@ impl Config {
         );
         opts.optflag("h", "help", "print this help menu");
 
-        let usage = opts.usage(&format!("Usage: {} [options] SERVER_JAR", args[0]));
+        let usage = opts.usage(&format!("Usage: {} [options] SERVER_FILE", args[0]));
 
         let matches = opts
             .parse(&args[1..])
             .or_else(|e| return Err(e.to_string()))?;
+
+        if matches.opt_present("h") {
+            return Err(usage);
+        }
 
         let file = if matches.free.len() == 1 {
             matches.free[0].clone()
@@ -58,10 +62,6 @@ impl Config {
                 return Err(format!("Unrecognized argument:{}", free));
             }
         };
-
-        if matches.opt_present("h") {
-            return Err(usage);
-        }
 
         let token = matches
             .opt_str("t")
