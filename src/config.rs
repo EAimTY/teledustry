@@ -2,6 +2,7 @@ use getopts::Options;
 
 pub struct Config {
     pub token: String,
+    pub user: String,
     pub proxy: Option<String>,
     pub webhook: u16,
     pub file: String,
@@ -16,6 +17,12 @@ impl Config {
             "token",
             "(required) set Telegram Bot HTTP API token",
             "TOKEN",
+        );
+        opts.optopt(
+            "u",
+            "user",
+            "(required)specify a Telegram user who can interact with this bot",
+            "TELEGRAM_USER_ID",
         );
         opts.optopt(
             "p",
@@ -60,6 +67,10 @@ impl Config {
             .opt_str("t")
             .ok_or_else(|| String::from("Telegram Bot HTTP API token not set"))?;
 
+        let user = matches
+            .opt_str("u")
+            .ok_or_else(|| String::from("Telegram user id not set"))?;
+
         let proxy = matches.opt_str("p");
 
         let webhook = matches
@@ -70,6 +81,7 @@ impl Config {
 
         Ok(Self {
             token,
+            user,
             proxy,
             webhook,
             file,

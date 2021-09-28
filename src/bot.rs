@@ -40,7 +40,7 @@ impl BotInstance {
         Ok(Self {
             api,
             webhook: config.webhook,
-            context: Context::init(),
+            context: Context::init(config.user.clone()),
         })
     }
 
@@ -105,13 +105,15 @@ impl BotInstance {
 }
 
 pub struct Context {
+    pub user: String,
     pub commands: Arc<RwLock<Option<Arc<HashMap<String, GameCommand>>>>>,
     pub output_chat: Arc<Mutex<HashSet<i64>>>,
 }
 
 impl Context {
-    fn init() -> Self {
+    fn init(user_id: String) -> Self {
         Self {
+            user: user_id,
             commands: Arc::new(RwLock::new(None)),
             output_chat: Arc::new(Mutex::new(HashSet::new())),
         }
@@ -121,6 +123,7 @@ impl Context {
 impl Clone for Context {
     fn clone(&self) -> Self {
         Self {
+            user: self.user.clone(),
             commands: Arc::clone(&self.commands),
             output_chat: Arc::clone(&self.output_chat),
         }
@@ -162,18 +165,22 @@ impl UpdateHandler for BotUpdateHandler {
         Box::pin(async move {
             if let UpdateKind::Message(message) = update.kind {
                 if let Ok(command) = Command::try_from(message) {
-                    let commands = Arc::clone(
-                        Arc::clone(&handler.context.commands)
-                            .read()
-                            .await
-                            .as_ref()
-                            .unwrap(),
-                    );
+                    if let Some(user) = command.get_message().get_user() {
+                        if user.username.as_ref() == Some(&handler.context.user) {
+                            let commands = Arc::clone(
+                                Arc::clone(&handler.context.commands)
+                                    .read()
+                                    .await
+                                    .as_ref()
+                                    .unwrap(),
+                            );
 
-                    if let Some(game_command) = commands.get(command.get_name()) {
-                        match (game_command.handler)(handler, command).await {
-                            Ok(_) => (),
-                            Err(e) => eprintln!("{}", e.to_string()),
+                            if let Some(game_command) = commands.get(command.get_name()) {
+                                match (game_command.handler)(handler, command).await {
+                                    Ok(_) => (),
+                                    Err(e) => eprintln!("{}", e.to_string()),
+                                }
+                            }
                         }
                     }
                 }
