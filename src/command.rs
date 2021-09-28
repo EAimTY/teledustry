@@ -122,7 +122,7 @@ impl GameCommandMap {
             command: Command,
         ) -> BoxFuture<'static, Result<(), ExecuteError>> {
             Box::pin(async move {
-                let name = &command.get_name()[1..];
+                let name = &command.get_name()[1..].replace('_', "-");
                 let args = command
                     .get_args()
                     .into_iter()
@@ -144,10 +144,15 @@ impl GameCommandMap {
 
         for command in help_output.split('\n') {
             if let Some((name, description)) = command.trim_start().split_once(' ') {
-                commands.entry(format!("/{}", name)).or_insert(GameCommand {
-                    description: description.trim_start_matches("- ").to_string(),
-                    handler: Box::new(generic_handler) as GameCommandHandler,
-                });
+                commands
+                    .entry(format!("/{}", name.replace('-', "_")))
+                    .or_insert(GameCommand {
+                        description: description
+                            .trim_start_matches("- ")
+                            .trim_end_matches('.')
+                            .to_string(),
+                        handler: Box::new(generic_handler) as GameCommandHandler,
+                    });
             }
         }
 
