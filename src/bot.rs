@@ -11,8 +11,8 @@ use std::{
 };
 use tgbot::{
     longpoll::LongPoll,
-    methods::SendMessage,
-    types::{Command, Update, UpdateKind},
+    methods::{GetMe, SendMessage},
+    types::{Command, MessageKind, Update, UpdateKind},
     webhook, Api, Config as ApiConfig, UpdateHandler,
 };
 use tokio::{
@@ -106,6 +106,7 @@ impl BotInstance {
 
 pub struct Context {
     pub user: String,
+    pub bot_username: Arc<RwLock<Option<String>>>,
     pub commands: Arc<RwLock<Option<Arc<HashMap<String, GameCommand>>>>>,
     pub output_chat: Arc<Mutex<HashSet<i64>>>,
 }
@@ -114,6 +115,7 @@ impl Context {
     fn init(user_id: String) -> Self {
         Self {
             user: user_id,
+            bot_username: Arc::new(RwLock::new(None)),
             commands: Arc::new(RwLock::new(None)),
             output_chat: Arc::new(Mutex::new(HashSet::new())),
         }
@@ -124,6 +126,7 @@ impl Clone for Context {
     fn clone(&self) -> Self {
         Self {
             user: self.user.clone(),
+            bot_username: Arc::clone(&self.bot_username),
             commands: Arc::clone(&self.commands),
             output_chat: Arc::clone(&self.output_chat),
         }
@@ -165,21 +168,64 @@ impl UpdateHandler for BotUpdateHandler {
         Box::pin(async move {
             if let UpdateKind::Message(message) = update.kind {
                 if let Ok(command) = Command::try_from(message) {
+                    let bot_username = Arc::clone(&handler.context.bot_username);
+
+                    let is_bot_username_known = bot_username.read().await.is_some();
+                    if !is_bot_username_known {
+                        let bot = match handler.api.execute(GetMe).await {
+                            Ok(b) => b,
+                            Err(e) => {
+                                eprintln!(
+                                    "Failed to get bot info from Telegram: {}",
+                                    e.to_string()
+                                );
+                                process::exit(1);
+                            }
+                        };
+
+                        let mut bot_username = bot_username.write().await;
+                        *bot_username = Some(bot.username);
+                    }
+
+                    let mut ignore_message = true;
+
                     if let Some(user) = command.get_message().get_user() {
                         if user.username.as_ref() == Some(&handler.context.user) {
-                            let commands = Arc::clone(
-                                Arc::clone(&handler.context.commands)
-                                    .read()
-                                    .await
-                                    .as_ref()
-                                    .unwrap(),
-                            );
+                            if matches!(command.get_message().kind, MessageKind::Group { .. })
+                                || matches!(
+                                    command.get_message().kind,
+                                    MessageKind::Supergroup { .. }
+                                )
+                            {
+                                let bot_username = bot_username.read().await;
 
-                            if let Some(game_command) = commands.get(command.get_name()) {
-                                match (game_command.handler)(handler, command).await {
-                                    Ok(_) => (),
-                                    Err(e) => eprintln!("{}", e.to_string()),
+                                if let Some(text) = command.get_message().get_text() {
+                                    if text
+                                        .data
+                                        .contains(&format!("@{}", bot_username.as_ref().unwrap()))
+                                    {
+                                        ignore_message = false;
+                                    }
                                 }
+                            } else {
+                                ignore_message = false;
+                            }
+                        }
+                    }
+
+                    if !ignore_message {
+                        let commands = Arc::clone(
+                            Arc::clone(&handler.context.commands)
+                                .read()
+                                .await
+                                .as_ref()
+                                .unwrap(),
+                        );
+
+                        if let Some(game_command) = commands.get(command.get_name()) {
+                            match (game_command.handler)(handler, command).await {
+                                Ok(_) => (),
+                                Err(e) => eprintln!("{}", e.to_string()),
                             }
                         }
                     }
