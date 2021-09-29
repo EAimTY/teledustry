@@ -21,7 +21,7 @@ impl Config {
         opts.optopt(
             "u",
             "user",
-            "(required)specify a Telegram user who can interact with this bot",
+            "(required) specify a Telegram user who can interact with this bot",
             "TELEGRAM_USERNAME",
         );
         opts.optopt(

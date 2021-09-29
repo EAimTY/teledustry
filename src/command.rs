@@ -43,7 +43,7 @@ https://github.com/EAimTY/teledustry
 Useful Commands: 
 
 /output - Send the output to current Telegram chat
-/stop_output Stop sending the output to current Telegram chat
+/stopoutput Stop sending the output to current Telegram chat
 /help - Print the help menu
 /host [mapname] [mode] - Open the server. Will default to survival and a random map if not specified
 /pause <on/off> - Pause or unpause the game
@@ -145,7 +145,7 @@ Useful Commands:
             },
         );
 
-        fn stop_output(
+        fn stopoutput(
             handler: BotUpdateHandler,
             command: Command,
         ) -> BoxFuture<'static, Result<(), ExecuteError>> {
@@ -170,10 +170,10 @@ Useful Commands:
             })
         }
         commands.insert(
-            String::from("/stop_output"),
+            String::from("/stopoutput"),
             GameCommand {
                 description: String::from("Stop sending the output to this chat"),
-                handler: Box::new(stop_output) as GameCommandHandler,
+                handler: Box::new(stopoutput) as GameCommandHandler,
             },
         );
 

@@ -25,7 +25,7 @@ Usage: teledustry [options] SERVER_FILE
 
 Options:
     -t, --token TOKEN                (required) set Telegram Bot HTTP API token
-    -u, --user TELEGRAM_USERNAME     (required)specify a Telegram user who can interact with this bot
+    -u, --user TELEGRAM_USERNAME     (required) specify a Telegram user who can interact with this bot
     -p, --proxy PROXY                set proxy (supported: http, https, socks5)
     -w, --webhook-port WEBHOOK_PORT  set webhook port (1 ~ 65535) and run bot in webhook mode
     -h, --help                       print this help menu
@@ -44,7 +44,7 @@ Please note: You have to use bot command `/output` to let your bot forwards game
 ## Useful Bot Commands
 
 - `/output` - Send the output to current Telegram chat
-- `/stop_output` Stop sending the output to current Telegram chat
+- `/stopoutput` Stop sending the output to current Telegram chat
 - `/help` - Print the help menu
 - `/host [mapname] [mode]` - Open the server. Will default to survival and a random map if not specified
 - `/pause <on/off>` - Pause or unpause the game
