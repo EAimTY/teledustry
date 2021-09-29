@@ -44,13 +44,14 @@ Please note: You have to use bot command `/output` to let your bot forwards game
 ## Useful Bot Commands
 
 - `/output` - Send the output to current Telegram chat
-- `/stopoutput` Stop sending the output to current Telegram chat
+- `/stopoutput` - Stop sending the output to current Telegram chat
 - `/help` - Print the help menu
 - `/host [mapname] [mode]` - Open the server. Will default to survival and a random map if not specified
 - `/pause <on/off>` - Pause or unpause the game
-- `/stop` Stop hosting the server
-- `/uploadmap` Upload a map to `config/maps/`
-- `/reloadmaps` Reload all maps from disk
+- `/stop` - Stop hosting the server
+- `/maps` - Display all available maps
+- `/uploadmap` - Upload a map to `config/maps/`
+- `/reloadmaps` - Reload all maps from disk
 
 ## Build
 
